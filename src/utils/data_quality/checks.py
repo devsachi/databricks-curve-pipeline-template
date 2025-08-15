@@ -115,15 +115,28 @@ def check_data_quality(
         )
         return zscore_df.filter(F.col("zscore") > n_std).count() == 0
     
-    @staticmethod
-    def check_date_continuity(df, date_column, expected_interval="1 day"):
-        """Check for gaps in date sequence"""
-        return df.select(
-            F.count(F.when(
-                F.datediff(
-                    F.lead(date_column).over(F.Window.orderBy(date_column)),
-                    F.col(date_column)
-                ) > F.expr(f"interval {expected_interval}"),
-                1
-            )).alias("gaps")
-        ).collect()[0].gaps == 0
+def check_date_continuity(
+    df: DataFrame,
+    date_column: str,
+    expected_interval: str = "1 day"
+) -> bool:
+    """
+    Pure function to check for gaps in date sequence
+
+    Args:
+        df: DataFrame containing date column
+        date_column: Name of column containing dates
+        expected_interval: Expected interval between dates (e.g., "1 day", "1 month")
+
+    Returns:
+        bool: True if no gaps found, False otherwise
+    """
+    return df.select(
+        F.count(F.when(
+            F.datediff(
+                F.lead(date_column).over(F.Window.orderBy(date_column)),
+                F.col(date_column)
+            ) > F.expr(f"interval {expected_interval}"),
+            1
+        )).alias("gaps")
+    ).collect()[0].gaps == 0

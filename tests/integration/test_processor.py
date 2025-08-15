@@ -4,10 +4,10 @@ from datetime import datetime
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql import functions as F
 
-from src.curve_formation.core.processor import CurveProcessor
-from src.curve_formation.core.writer import CurveWriter
-from src.utils.config_manager import ConfigManager
-from src.utils.data_quality.validator import DataValidator
+from src.curve_formation.core import processor
+from src.curve_formation.core import writer
+from src.utils import config_manager
+from src.utils.data_quality import validator
 
 @pytest.fixture(scope="session")
 def spark():
@@ -23,7 +23,6 @@ def spark():
 @pytest.fixture(scope="session")
 def config():
     """Load test configuration"""
-    config_manager = ConfigManager()
     return config_manager.load_config("dev")
 
 @pytest.fixture
@@ -73,28 +72,19 @@ def sample_market_data(spark):
         "CREDIT": credit_df
     }
 
-@pytest.fixture
-def curve_processor(config):
-    """Create curve processor instance"""
-    return CurveProcessor(config)
-
-@pytest.fixture
-def data_validator(config):
-    """Create data validator instance"""
-    return DataValidator()
-
-def test_market_data_validation(sample_market_data, data_validator, config):
+def test_market_data_validation(sample_market_data, config):
     """Test market data validation"""
     for asset_class, df in sample_market_data.items():
         validation_config = config["data_quality"][asset_class]
-        assert data_validator.validate_market_data(df, validation_config)
+        assert validator.validate_market_data(df, validation_config)
 
-def test_ir_curve_construction(sample_market_data, curve_processor, data_validator, config):
+def test_ir_curve_construction(sample_market_data, config, spark):
     """Test interest rate curve construction"""
-    ir_curves = curve_processor.process(
-        sample_market_data["IR"],
-        asset_class="IR",
-        trade_date=datetime.now()
+    trade_date = datetime.now()
+    ir_curves = processor.process_all_curves(
+        spark,
+        {"IR": sample_market_data["IR"]},
+        config
     )
     
     # Validate curve output structure
@@ -107,14 +97,15 @@ def test_ir_curve_construction(sample_market_data, curve_processor, data_validat
     
     # Validate curve properties
     validation_config = config["data_quality"]["IR_curves"]
-    assert data_validator.validate_market_data(curve_df, validation_config)
+    assert validator.validate_market_data(curve_df, validation_config)
 
-def test_fx_curve_construction(sample_market_data, curve_processor, data_validator, config):
+def test_fx_curve_construction(sample_market_data, config, spark):
     """Test FX curve construction"""
-    fx_curves = curve_processor.process(
-        sample_market_data["FX"],
-        asset_class="FX",
-        trade_date=datetime.now()
+    trade_date = datetime.now()
+    fx_curves = processor.process_all_curves(
+        spark,
+        {"FX": sample_market_data["FX"]},
+        config
     )
     
     # Validate curve output structure
@@ -127,14 +118,15 @@ def test_fx_curve_construction(sample_market_data, curve_processor, data_validat
     
     # Validate curve properties
     validation_config = config["data_quality"]["FX_curves"]
-    assert data_validator.validate_market_data(curve_df, validation_config)
+    assert validator.validate_market_data(curve_df, validation_config)
 
-def test_credit_curve_construction(sample_market_data, curve_processor, data_validator, config):
+def test_credit_curve_construction(sample_market_data, config, spark):
     """Test credit curve construction"""
-    credit_curves = curve_processor.process(
-        sample_market_data["CREDIT"],
-        asset_class="CREDIT",
-        trade_date=datetime.now()
+    trade_date = datetime.now()
+    credit_curves = processor.process_all_curves(
+        spark,
+        {"CREDIT": sample_market_data["CREDIT"]},
+        config
     )
     
     # Validate curve output structure
@@ -147,16 +139,16 @@ def test_credit_curve_construction(sample_market_data, curve_processor, data_val
     
     # Validate curve properties
     validation_config = config["data_quality"]["CREDIT_curves"]
-    assert data_validator.validate_market_data(curve_df, validation_config)
+    assert validator.validate_market_data(curve_df, validation_config)
 
-def test_curve_persistence(sample_market_data, curve_processor, config, tmp_path):
+def test_curve_persistence(sample_market_data, config, spark, tmp_path):
     """Test curve writing functionality"""
     # Process curves
     trade_date = datetime.now()
-    ir_curves = curve_processor.process(
-        sample_market_data["IR"],
-        asset_class="IR",
-        trade_date=trade_date
+    ir_curves = processor.process_all_curves(
+        spark,
+        {"IR": sample_market_data["IR"]},
+        config
     )
     
     # Set up temporary storage location
@@ -165,35 +157,31 @@ def test_curve_persistence(sample_market_data, curve_processor, config, tmp_path
     test_config["storage_root"] = storage_path
     
     # Write curves
-    curve_writer = CurveWriter(test_config)
-    curve_writer.write_curves(ir_curves, "IR", trade_date)
+    for curve_name, curve_df in ir_curves.items():
+        table_name = f"test_curves.{curve_name}_{trade_date.strftime('%Y%m%d')}"
+        writer.write_output(spark, curve_df, table_name)
     
     # Verify written files
     assert os.path.exists(storage_path)
     
 def test_end_to_end_pipeline(sample_market_data, config, spark):
     """Test complete pipeline execution"""
-    # Initialize components
-    curve_processor = CurveProcessor(config)
-    data_validator = DataValidator()
     trade_date = datetime.now()
     
     try:
         # Validate input data
         for asset_class, df in sample_market_data.items():
             validation_config = config["data_quality"][asset_class]
-            assert data_validator.validate_market_data(df, validation_config)
+            assert validator.validate_market_data(df, validation_config)
         
         # Process curves
-        all_curves = {}
-        for asset_class, df in sample_market_data.items():
-            curves = curve_processor.process(df, asset_class, trade_date)
-            all_curves[asset_class] = curves
+        all_curves = processor.process_all_curves(spark, sample_market_data, config)
             
-            # Validate outputs
+        # Validate outputs
+        for asset_class, curves in all_curves.items():
             validation_config = config["data_quality"][f"{asset_class}_curves"]
             for curve_name, curve_df in curves.items():
-                assert data_validator.validate_market_data(curve_df, validation_config)
+                assert validator.validate_market_data(curve_df, validation_config)
         
         assert len(all_curves) == len(sample_market_data)
         

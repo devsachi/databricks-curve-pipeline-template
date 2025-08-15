@@ -78,50 +78,70 @@ def generate_data_quality_report(
             json.dump(report, f, indent=2)
     
     return report
-        
-    def generate_report(self, df: DataFrame, config: Dict[str, Any]) -> None:
-        """Generate comprehensive data quality report"""
-        try:
-            report = {
-                "timestamp": datetime.now().isoformat(),
-                "total_records": df.count(),
-                "summary_statistics": self.generate_summary_stats(
-                    df, config["columns_to_analyze"]
-                ),
-                "distributions": {}
-            }
+def generate_quality_report(
+    df: DataFrame,
+    config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Generate comprehensive data quality report
+    
+    Args:
+        df: Input DataFrame to analyze
+        config: Configuration containing:
+            - columns_to_analyze: List of columns to include in summary stats
+            - distribution_columns: Optional list of columns for distribution analysis
+            - distribution_bins: Optional number of bins for distributions
+            - correlation_columns: Optional list of columns for correlation analysis
             
-            # Generate distributions for numeric columns
-            for col in config.get("distribution_columns", []):
-                report["distributions"][col] = self.generate_distribution_stats(
+    Returns:
+        Dict containing the quality report with timestamp, statistics and distributions
+    """
+    try:
+        report = {
+            "timestamp": datetime.now().isoformat(),
+            "total_records": df.count(),
+            "summary_statistics": generate_summary_stats(
+                df, config["columns_to_analyze"]
+            ),
+            "distributions": {
+                col: generate_distribution_stats(
                     df, col, config.get("distribution_bins", 10)
                 )
+                for col in config.get("distribution_columns", [])
+            }
             
-            # Add correlation matrix if specified
-            if config.get("compute_correlations", False):
-                numeric_cols = [
-                    f.name for f in df.schema.fields 
-                    if isinstance(f.dataType, (IntegerType, DoubleType, FloatType))
-                ]
-                
-                if numeric_cols:
-                    correlation_matrix = {}
-                    for col1 in numeric_cols:
-                        correlation_matrix[col1] = {}
-                        for col2 in numeric_cols:
-                            correlation = df.stat.corr(col1, col2)
-                            correlation_matrix[col1][col2] = correlation
-                            
-                    report["correlations"] = correlation_matrix
+        
+        # Add correlation matrix if specified
+        if config.get("compute_correlations", False):
+            correlation_columns = config.get("correlation_columns", [])
+            if correlation_columns:
+                correlations = df.select(correlation_columns).toPandas().corr()
+                report["correlations"] = correlations.to_dict()
+            else:
+                logger.warning("No correlation columns specified in config")
+        else:
+            logger.debug("Correlation computation not requested in config")
+        
+        return report
+        
+    except Exception as e:
+        logger.error(f"Error generating quality report: {str(e)}")
+        raise
+def save_quality_report(report: Dict[str, Any], output_path: str) -> None:
+    """Save data quality report to JSON file
+    
+    Args:
+        report: The quality report dictionary to save
+        output_path: Directory path where to save the report
+    """
+    try:
+        report_path = f"{output_path}/data_quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
             
-            # Save report
-            report_path = f"{self.output_path}/data_quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            
-            with open(report_path, 'w') as f:
-                json.dump(report, f, indent=2)
-                
-            logger.info(f"Data quality report generated: {report_path}")
-            
-        except Exception as e:
-            logger.error(f"Error generating data quality report: {str(e)}")
-            raise
+        logger.info(f"Data quality report generated: {report_path}")
+        
+    except Exception as e:
+        logger.error(f"Error saving data quality report: {str(e)}")
+        raise

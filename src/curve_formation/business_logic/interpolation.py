@@ -17,6 +17,39 @@ def prepare_interpolation_input(
     y = np.array([p[1] for p in points])
     return x, y
 
+
+def log_linear_interpolation(
+    spark: SparkSession,
+    df: DataFrame,
+    x_col: str,
+    y_col: str,
+    target_points: List[Union[int, float]]
+) -> DataFrame:
+    """Perform log-linear interpolation"""
+    # Prepare input data
+    x, y = prepare_interpolation_input(df, x_col, y_col)
+    
+    # Take log of y values
+    log_y = np.log(y)
+    
+    # Create target points DataFrame
+    target_df = spark.createDataFrame(
+        [(float(x),) for x in target_points],
+        [x_col]
+    )
+    
+    # Define UDF for interpolation
+    @F.udf(returnType=DoubleType())
+    def interpolate_udf(x):
+        log_val = np.interp(x, x, log_y)
+        return float(np.exp(log_val))
+    
+    # Apply interpolation
+    return target_df.withColumn(
+        f"interpolated_{y_col}",
+        interpolate_udf(F.col(x_col))
+    )
+
 def cubic_spline(
     spark: SparkSession,
     df: DataFrame,

@@ -1,14 +1,14 @@
-from typing import Dict, List
+from typing import Dict, List, Any
 from pyspark.sql import DataFrame, SparkSession
 from ..curves import interest_rate_curve, fx_curve, credit_curve, inflation_curve, volatility_curve
 from .utils import calculate_curve_metrics, standardize_curve_output
-from ..utils.data_quality.validator import validate_input_data
+from curve_formation.utils.data_quality.validator import validate_input_data
 
 def generate_curve(
     spark: SparkSession,
     input_df: DataFrame,
     curve_type: str,
-    config: Dict[str, any]
+    config: Dict[str, Any]
 ) -> DataFrame:
     """Generate a specific type of curve"""
     curve_generators = {

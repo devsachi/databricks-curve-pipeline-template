@@ -3,9 +3,9 @@ from typing import Dict, Any, List
 from ..business_logic import interpolation, day_count
 from .base_curve import prepare_curve_input
 
-def get_standard_tenors() -> List[int]:
+def get_standard_tenors() -> List[float]:
     """Get standard tenor points in years"""
-    return [1, 2, 3, 5, 7, 10]
+    return [1.0, 2.0, 3.0, 5.0, 7.0, 10.0]
 
 def apply_rating_grouping(df: DataFrame) -> DataFrame:
     """Apply credit rating grouping logic"""
@@ -17,15 +17,27 @@ def apply_rating_grouping(df: DataFrame) -> DataFrame:
          .otherwise("Other")
     )
 
-def calculate_credit_curve(input_df: DataFrame, config: Dict[str, Any]) -> DataFrame:
-    """Calculate credit spread curve"""
+def calculate_credit_curve(
+    input_df: DataFrame,
+    config: Dict[str, Dict[str, str]]
+) -> DataFrame:
+    """Calculate credit spread curve
+    
+    Args:
+        input_df: Input DataFrame containing raw credit spread data
+        config: Configuration dictionary containing:
+            curve_parameters: Dict with:
+                default_day_count: Day count convention to use
+    
+    Returns:
+        DataFrame containing interpolated credit spread curve"""
     # Prepare input data
     clean_df = prepare_curve_input(input_df, config)
     
     # Apply day count convention
     df_with_dcf = day_count.apply_convention(
         clean_df,
-        config.curve_parameters.default_day_count,
+        config["curve_parameters"]["default_day_count"],
         "start_date",
         "end_date"
     )
@@ -49,6 +61,15 @@ def calculate_credit_curve(input_df: DataFrame, config: Dict[str, Any]) -> DataF
     )
 
 def generate(spark: DataFrame, input_df: DataFrame, config: Dict[str, Any]) -> DataFrame:
-    """Generate credit spread curve from input data"""
-    curve = CreditCurve(config)
-    return curve.calculate(input_df)
+    """Generate credit spread curve from input data
+    
+    Args:
+        spark: Spark session
+        input_df: Input DataFrame containing raw credit spread data
+        config: Configuration dictionary containing:
+            curve_parameters: Dict with:
+                default_day_count: Day count convention to use
+    
+    Returns:
+        DataFrame containing the calculated credit spread curve"""
+    return calculate_credit_curve(input_df, config)
