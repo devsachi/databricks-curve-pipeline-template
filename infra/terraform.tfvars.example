@@ -1,0 +1,5 @@
+# Example terraform.tfvars file
+environment = "dev"
+notification_email = "your-email@example.com"
+databricks_host = "https://your-workspace.cloud.databricks.com"
+# databricks_token = "your-token-here"  # Better to set via environment variable

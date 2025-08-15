@@ -1,0 +1,20 @@
+[
+	{
+		"instrument_id": "USD_BOND_001",
+		"instrument_type": "bond",
+		"currency": "USD",
+		"maturity_date": "2025-12-31",
+		"yield": 0.025,
+		"price": 98.5,
+		"as_of_date": "2024-01-15"
+	},
+	{
+		"instrument_id": "USD_OPTION_001",
+		"instrument_type": "option",
+		"currency": "USD",
+		"expiry_date": "2024-06-15",
+		"strike": 100.0,
+		"volatility": 0.15,
+		"as_of_date": "2024-01-15"
+	}
+]
