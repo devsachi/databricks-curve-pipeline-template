@@ -1,1 +1,42 @@
-# ...existing content from curve_formation_pipeline/configs/dev.yaml...
+extends: base.yaml
+
+unity_catalog:
+  input:
+    catalog: "dev_financial_marts"
+  output:
+    catalog: "dev_analytics"
+
+curve_parameters:
+  interpolation_method: "linear"  # Simpler for development
+
+spark:
+  config:
+    spark.sql.shuffle.partitions: 4
+    spark.databricks.delta.autoCompact.enabled: true
+    spark.databricks.delta.optimizeWrite.enabled: true
+
+monitoring:
+  metrics_retention_days: 7
+  alert_thresholds:
+    missing_data_percentage: 20
+    anomaly_score_threshold: 5
+
+data_quality:
+  IR:
+    anomaly_checks:
+      - column: value
+        n_std: 4  # More lenient in dev
+  FX:
+    anomaly_checks:
+      - column: spot_rate
+        n_std: 4
+      - column: forward_points
+        n_std: 4
+  CREDIT:
+    anomaly_checks:
+      - column: spread
+        n_std: 4
+
+logging:
+  level: DEBUG
+  retention_days: 7

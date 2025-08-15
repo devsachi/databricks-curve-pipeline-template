@@ -1,1 +1,55 @@
-# ...existing content from curve_formation_pipeline/configs/prod.yaml...
+extends: base.yaml
+
+unity_catalog:
+  input:
+    catalog: "prod_financial_marts"
+  output:
+    catalog: "prod_analytics"
+
+spark:
+  config:
+    spark.sql.shuffle.partitions: auto
+    spark.databricks.delta.autoCompact.enabled: true
+    spark.databricks.delta.optimizeWrite.enabled: true
+    spark.databricks.delta.autoOptimize.optimizeWrite: true
+    spark.databricks.delta.properties.enableChangeDataFeed: true
+
+monitoring:
+  metrics_retention_days: 90
+  alert_thresholds:
+    missing_data_percentage: 5
+    anomaly_score_threshold: 3
+  alerts:
+    email:
+      - market_data_team@company.com
+      - risk_team@company.com
+    severity_levels:
+      high:
+        missing_data_percentage: 10
+        anomaly_score_threshold: 4
+      critical:
+        missing_data_percentage: 20
+        anomaly_score_threshold: 5
+
+data_quality:
+  IR:
+    anomaly_checks:
+      - column: value
+        n_std: 3  # Stricter in prod
+  FX:
+    anomaly_checks:
+      - column: spot_rate
+        n_std: 3
+      - column: forward_points
+        n_std: 3
+  CREDIT:
+    anomaly_checks:
+      - column: spread
+        n_std: 3
+
+logging:
+  level: INFO
+  retention_days: 90
+  audit:
+    enabled: true
+    table: "curve_formation_audit"

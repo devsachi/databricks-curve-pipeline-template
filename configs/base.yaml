@@ -1,1 +1,213 @@
-# ...existing content from curve_formation_pipeline/configs/base.yaml...
+unity_catalog:
+  input:
+    catalog: "financial_marts"
+    schema: "market_data"
+    tables:
+      rates: "raw_interest_rates"
+      fx: "raw_fx_rates"
+      credit: "raw_credit_spreads"
+      inflation: "raw_inflation_data"
+      volatility: "raw_volatility_data"
+  
+  output:
+    catalog: "analytics"
+    schema: "derived_curves"
+    tables:
+      combined: "combined_curves"
+      rates: "interest_rate_curve"
+      credit: "credit_curve"
+      fx: "fx_volatility_curve"
+      inflation: "inflation_curve"
+  
+  monitoring:
+    schema: "monitoring"
+    tables:
+      metrics: "curve_metrics"
+      alerts: "curve_alerts"
+      audit: "curve_audit"
+
+curve_parameters:
+  interpolation_method: "cubic_spline"
+  default_day_count: "ACT/360"
+  business_calendar: "TARGET"
+  validation_thresholds:
+    max_rate: 0.2
+    min_rate: -0.05
+    max_volatility: 1.5
+
+monitoring:
+  base_metrics:
+    - name: market_data_count
+      description: "Count of market data points"
+      threshold:
+        min: 100
+        max: null
+    
+    - name: curve_point_count
+      description: "Count of curve points generated"
+      threshold:
+        min: 10
+        max: null
+    
+    - name: processing_time
+      description: "Time taken to process curves"
+      threshold:
+        min: null
+        max: 300  # 5 minutes
+    
+    - name: data_quality_score
+      description: "Overall data quality score"
+      threshold:
+        min: 0.8
+        max: 1.0
+
+  alert_severities:
+    - name: INFO
+      description: "Informational alerts"
+      action: "Log only"
+    
+    - name: WARNING
+      description: "Warning alerts that need attention"
+      action: "Email notification"
+    
+    - name: ERROR
+      description: "Critical errors requiring immediate attention"
+      action: "Email + SMS notification"
+
+  alert_rules:
+    - name: missing_market_data
+      description: "Check for missing market data"
+      condition: "market_data_count < threshold.min"
+      severity: ERROR
+    
+    - name: processing_timeout
+      description: "Check for processing timeout"
+      condition: "processing_time > threshold.max"
+      severity: ERROR
+    
+    - name: low_quality_score
+      description: "Check for low data quality score"
+      condition: "data_quality_score < threshold.min"
+      severity: WARNING
+
+  notification_channels:
+    email:
+      - market_data_team@company.com
+    sms:
+      - "+1234567890"  # Emergency contact
+
+data_quality:
+  IR:
+    required_columns: [trade_date, instrument_type, tenor, value, source]
+    key_columns: [trade_date, instrument_type, tenor]
+    range_checks:
+      - column: value
+        min: -0.05
+        max: 0.2  # Aligned with validation_thresholds
+    monotonicity_checks:
+      - time_column: tenor
+        value_column: value
+        ascending: true
+    anomaly_checks:
+      - column: value
+        n_std: 3
+    continuity_checks:
+      - date_column: trade_date
+        interval: 1 day
+
+  FX:
+    required_columns: [trade_date, currency_pair, tenor, spot_rate, forward_points, source]
+    key_columns: [trade_date, currency_pair, tenor]
+    range_checks:
+      - column: spot_rate
+        min: 0.001
+        max: 1000
+      - column: forward_points
+        min: -10000
+        max: 10000
+    monotonicity_checks:
+      - time_column: tenor
+        value_column: forward_points
+        ascending: true
+    anomaly_checks:
+      - column: spot_rate
+        n_std: 3
+      - column: forward_points
+        n_std: 3
+    continuity_checks:
+      - date_column: trade_date
+        interval: 1 day
+
+  CREDIT:
+    required_columns: [trade_date, issuer, rating, tenor, spread, source]
+    key_columns: [trade_date, issuer, rating, tenor]
+    range_checks:
+      - column: spread
+        min: 0
+        max: 10000
+    monotonicity_checks:
+      - time_column: tenor
+        value_column: spread
+        ascending: true
+    anomaly_checks:
+      - column: spread
+        n_std: 3
+    continuity_checks:
+      - date_column: trade_date
+        interval: 1 day
+
+  IR_curves:
+    required_columns: [trade_date, curve_name, tenor, zero_rate, discount_factor]
+    key_columns: [trade_date, curve_name, tenor]
+    range_checks:
+      - column: zero_rate
+        min: -0.05
+        max: 0.2  # Aligned with validation_thresholds
+      - column: discount_factor
+        min: 0
+        max: 2
+    monotonicity_checks:
+      - time_column: tenor
+        value_column: discount_factor
+        ascending: false
+    anomaly_checks:
+      - column: zero_rate
+        n_std: 3
+
+  FX_curves:
+    required_columns: [trade_date, currency_pair, tenor, forward_rate, volatility]
+    key_columns: [trade_date, currency_pair, tenor]
+    range_checks:
+      - column: forward_rate
+        min: 0.001
+        max: 1000
+      - column: volatility
+        min: 0
+        max: 1.5  # Aligned with validation_thresholds
+    monotonicity_checks:
+      - time_column: tenor
+        value_column: forward_rate
+        ascending: true
+    anomaly_checks:
+      - column: forward_rate
+        n_std: 3
+      - column: volatility
+        n_std: 3
+
+  CREDIT_curves:
+    required_columns: [trade_date, curve_name, tenor, survival_probability, hazard_rate]
+    key_columns: [trade_date, curve_name, tenor]
+    range_checks:
+      - column: survival_probability
+        min: 0
+        max: 1
+      - column: hazard_rate
+        min: 0
+        max: 1
+    monotonicity_checks:
+      - time_column: tenor
+        value_column: survival_probability
+        ascending: false
+    anomaly_checks:
+      - column: hazard_rate
+        n_std: 3

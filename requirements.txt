@@ -1,1 +1,13 @@
-# ...existing content from curve_formation_pipeline/requirements.txt...
+# Core dependencies
+pyspark==3.5.0
+delta-spark==3.0.0
+pyyaml==6.0.1
+numpy==1.24.3
+scipy==1.11.1
+pandas==2.0.3
+
+# Databricks
+databricks-sdk==0.18.0
+
+# Configuration and utilities
+python-dotenv==1.0.0
