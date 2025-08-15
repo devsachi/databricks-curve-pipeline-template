@@ -1,1 +1,10 @@
-# ...existing content from curve_formation_pipeline/src/curve_formation/core/__init__.py...
+"""Core functionality module for curve formation"""
+from . import processor
+from . import combiner
+from . import utils
+
+__all__ = [
+    'processor',
+    'combiner',
+    'utils'
+]

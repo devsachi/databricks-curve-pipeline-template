@@ -1,72 +1,94 @@
-# Curve Formation Pipeline
+# Databricks Curve Formation Pipeline
+
+A functional programming approach to financial curve construction and analytics using Apache Spark and Databricks.
 
 ## Overview
-This pipeline automates the construction and management of financial market curves using Databricks. It processes raw market data from Unity Catalog, applies sophisticated curve construction techniques, and stores the results back in Unity Catalog for downstream consumption.
+This pipeline implements a pure functional approach to constructing and managing financial market curves using Databricks. It processes raw market data from Unity Catalog, applies sophisticated curve construction techniques, and stores the results back in Unity Catalog for downstream consumption.
 
 ## Architecture
 
-### High-Level Flow
-1. **Data Ingestion**
-   - Raw market data loaded from Unity Catalog
-   - Data quality checks performed on input
-   - Market data normalized and validated
+### Design Philosophy
+The pipeline follows functional programming principles:
+- **Pure Functions**: All operations are implemented as pure functions with no side effects
+- **Immutable Data**: Data transformations create new DataFrames rather than modifying existing ones
+- **Function Composition**: Complex operations are built by composing simpler functions
+- **Type Safety**: Comprehensive type hints and validation throughout the codebase
 
-2. **Curve Construction**
-   - Multiple curve types supported:
-     - Interest Rate Curves
-     - FX Volatility Curves
-     - Credit Curves
-     - Inflation Curves
-   - Business logic applied per curve type
-   - Interpolation and smoothing techniques
-
-3. **Data Processing**
-   - Parallel processing of curve construction
-   - Data validation at each step
-   - Results aggregation and combination
-
-4. **Output Generation**
-   - Final curve data validated
-   - Results written to Unity Catalog
-   - Audit logs and metrics captured
-
-### Component Architecture
-
+### Project Structure
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│   Unity Catalog │     │  Curve Formation │     │ Unity Catalog  │
-│   (Input Data)  │────▶│     Pipeline    │────▶│  (Output Data) │
-└─────────────────┘     └──────────────────┘     └────────────────┘
-                               │
-                        ┌──────┴───────┐
-                        │ Business     │
-                        │ Logic Layer  │
-                        └──────────────┘
+src/
+├── curve_formation/
+│   ├── business_logic/    # Core algorithmic functions
+│   │   ├── calendar.py    # Date handling functions
+│   │   ├── day_count.py   # Day count convention functions
+│   │   ├── interpolation.py # Curve interpolation functions
+│   │   └── smoothing.py   # Curve smoothing functions
+│   ├── core/             # Main processing functions
+│   │   ├── processor.py  # Curve processing orchestration
+│   │   ├── combiner.py   # Curve combination logic
+│   │   └── utils.py      # Core utility functions
+│   └── curves/           # Curve type implementations
+│       ├── credit_curve.py
+│       ├── fx_curve.py
+│       ├── inflation_curve.py
+│       └── interest_rate_curve.py
+└── utils/
+    ├── data_quality/     # Data validation functions
+    │   ├── checks.py     # Data quality check functions
+    │   ├── reports.py    # Reporting functions
+    │   └── validator.py  # Validation orchestration
+    ├── config_manager.py # Configuration management
+    ├── constants.py      # Shared constants
+    ├── type_definitions.py # Common type definitions
+    └── exception_handler.py # Error handling utilities
+```
+
+### Data Flow
+```
+Raw Market Data
+      ↓
+Data Validation Functions
+      ↓
+Curve Calculation Functions
+      ↓
+Smoothing/Interpolation Functions
+      ↓
+Output Formatting Functions
+      ↓
+Quality Checked Results
 ```
 
 ## Features
-- **Modular Architecture**
-  - Separate business logic from processing
-  - Pluggable curve construction modules
-  - Extensible data quality framework
 
-- **Curve Types**
-  - Interest rate curves (zero rates, forwards)
-  - FX volatility surfaces
-  - Credit spread curves
-  - Inflation curves
-  - Volatility curves
+### Functional Implementation
+- **Pure Functions**: All operations implemented as pure functions
+- **Type Safety**: Comprehensive type hints throughout
+- **Error Handling**: Functional error handling patterns
+- **Immutable Data**: No state mutations
 
-- **Data Quality**
-  - Input data validation
-  - Business rule checks
-  - Output data verification
-  - Comprehensive reporting
+### Business Logic
+- **Curve Types** (All implemented functionally):
+  - Interest Rate Curves
+  - FX Volatility Surfaces
+  - Credit Spread Curves
+  - Inflation Curves
+  - Volatility Surfaces
 
-- **Infrastructure**
-  - Databricks integration
-  - Unity Catalog management
-  - Terraform-based deployment
+### Data Processing
+- **Validation Functions**:
+  - Schema validation
+  - Data quality checks
+  - Business rule verification
+  
+- **Calculation Functions**:
+  - Interpolation utilities
+  - Smoothing algorithms
+  - Day count conventions
+  
+- **Output Functions**:
+  - Result formatting
+  - Quality validation
+  - Metric generation
 
 ## Setup and Installation
 

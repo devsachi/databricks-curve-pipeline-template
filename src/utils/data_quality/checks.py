@@ -1,53 +1,117 @@
-from pyspark.sql import functions as F
+"""Data quality check functions"""
+from typing import List, Union, Dict, Any
+from pyspark.sql import DataFrame, functions as F
 from pyspark.sql.types import *
 import numpy as np
 
-class DataQualityChecks:
-    """Data quality check implementations"""
+def check_missing_values(df: DataFrame, columns: List[str]) -> bool:
+    """Check for missing values in specified columns"""
+    return all(
+        df.filter(F.col(col).isNull()).count() == 0
+        for col in columns
+    )
+
+def check_value_ranges(
+    df: DataFrame,
+    column: str,
+    min_value: Union[int, float],
+    max_value: Union[int, float]
+) -> bool:
+    """Check if values are within specified range"""
+    return df.filter(
+        (F.col(column) < min_value) | (F.col(column) > max_value)
+    ).count() == 0
+
+def check_duplicates(df: DataFrame, key_columns: List[str]) -> bool:
+    """Check for duplicate records"""
+    return df.count() == df.dropDuplicates(key_columns).count()
+
+def check_monotonicity(
+    df: DataFrame,
+    time_column: str,
+    value_column: str,
+    ascending: bool = True
+) -> bool:
+    """Check if values are monotonic"""
+    window = F.Window.orderBy(time_column)
+    check = df.withColumn(
+        "is_monotonic",
+        F.when(ascending,
+              F.col(value_column) >= F.lag(value_column).over(window))
+        .otherwise(F.col(value_column) <= F.lag(value_column).over(window))
+    )
+    return check.filter(~F.col("is_monotonic")).count() == 0
+
+def calculate_zscore(
+    df: DataFrame,
+    column: str
+) -> DataFrame:
+    """Calculate z-score for a column"""
+    stats = df.select(
+        F.mean(column).alias("mean"),
+        F.stddev(column).alias("stddev")
+    ).collect()[0]
     
-    @staticmethod
-    def check_missing_values(df, columns):
-        """Check for missing values in specified columns"""
-        return all(
-            df.filter(F.col(col).isNull()).count() == 0
-            for col in columns
+    return df.withColumn(
+        "zscore",
+        F.abs((F.col(column) - stats.mean) / stats.stddev)
+    )
+
+def check_statistical_anomalies(
+    df: DataFrame,
+    column: str,
+    n_std: float = 3
+) -> bool:
+    """Check for statistical anomalies using z-score"""
+    zscore_df = calculate_zscore(df, column)
+    return zscore_df.filter(F.col("zscore") > n_std).count() == 0
+
+def check_data_quality(
+    df: DataFrame,
+    config: Dict[str, Any]
+) -> Dict[str, bool]:
+    """Run all configured data quality checks"""
+    results = {}
+    
+    # Check missing values
+    if "required_columns" in config:
+        results["missing_values"] = check_missing_values(
+            df, config["required_columns"]
         )
     
-    @staticmethod
-    def check_value_ranges(df, column, min_value, max_value):
-        """Check if values are within specified range"""
-        return df.filter(
-            (F.col(column) < min_value) | (F.col(column) > max_value)
-        ).count() == 0
-    
-    @staticmethod
-    def check_duplicates(df, key_columns):
-        """Check for duplicate records"""
-        return df.count() == df.dropDuplicates(key_columns).count()
-    
-    @staticmethod
-    def check_monotonicity(df, time_column, value_column, ascending=True):
-        """Check if values are monotonic"""
-        window = F.Window.orderBy(time_column)
-        check = df.withColumn(
-            "is_monotonic",
-            F.when(ascending,
-                  F.col(value_column) >= F.lag(value_column).over(window))
-            .otherwise(F.col(value_column) <= F.lag(value_column).over(window))
+    # Check value ranges
+    for col, range_config in config.get("value_ranges", {}).items():
+        results[f"{col}_range"] = check_value_ranges(
+            df,
+            col,
+            range_config["min"],
+            range_config["max"]
         )
-        return check.filter(~F.col("is_monotonic")).count() == 0
     
-    @staticmethod
-    def check_statistical_anomalies(df, column, n_std=3):
-        """Check for statistical anomalies using z-score"""
-        stats = df.select(
-            F.mean(column).alias("mean"),
-            F.stddev(column).alias("stddev")
-        ).collect()[0]
-        
-        zscore_df = df.withColumn(
-            "zscore",
-            F.abs((F.col(column) - stats.mean) / stats.stddev)
+    # Check duplicates
+    if "unique_keys" in config:
+        results["duplicates"] = check_duplicates(
+            df, config["unique_keys"]
+        )
+    
+    # Check monotonicity
+    for check in config.get("monotonicity_checks", []):
+        results[f"{check['value_col']}_monotonic"] = check_monotonicity(
+            df,
+            check["time_col"],
+            check["value_col"],
+            check.get("ascending", True)
+        )
+    
+    # Check anomalies
+    for col, anomaly_config in config.get("anomaly_checks", {}).items():
+        results[f"{col}_anomalies"] = check_statistical_anomalies(
+            df,
+            col,
+            anomaly_config.get("n_std", 3)
+        )
+    
+    return results
         )
         return zscore_df.filter(F.col("zscore") > n_std).count() == 0
     

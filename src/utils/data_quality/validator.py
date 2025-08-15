@@ -1,13 +1,91 @@
-from typing import List, Dict, Any
-from .checks import DataQualityChecks
+"""Data validation functions for curve formation"""
+from typing import Dict, Any, List, Callable
+from datetime import datetime
+from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 from ..logging_utils import get_logger
 
 logger = get_logger(__name__)
 
-class DataValidator:
-    """Data validation orchestrator"""
+def validate_schema(
+    df: DataFrame,
+    required_columns: List[str],
+    column_types: Dict[str, str]
+) -> bool:
+    """Validate DataFrame schema against requirements"""
+    logger.info(f"Validating schema for {len(required_columns)} required columns")
     
-    def __init__(self):
+    # Check required columns
+    if not all(col in df.columns for col in required_columns):
+        logger.error("Missing required columns")
+        return False
+        
+    # Check column types
+    schema_dict = {f.name: f.dataType.typeName() for f in df.schema.fields}
+    for col, expected_type in column_types.items():
+        if col in df.columns and schema_dict[col] != expected_type:
+            logger.error(f"Invalid type for column {col}")
+            return False
+            
+    return True
+
+def validate_date_range(
+    df: DataFrame,
+    date_col: str,
+    min_date: datetime = None,
+    max_date: datetime = None
+) -> bool:
+    """Validate date range in DataFrame"""
+    logger.info(f"Validating date range for column {date_col}")
+    
+    if date_col not in df.columns:
+        logger.error(f"Date column {date_col} not found")
+        return False
+        
+    date_stats = df.agg(
+        F.min(date_col).alias("min_date"),
+        F.max(date_col).alias("max_date")
+    ).collect()[0]
+    
+    if min_date and date_stats.min_date < min_date:
+        logger.error(f"Found dates before minimum date {min_date}")
+        return False
+    if max_date and date_stats.max_date > max_date:
+        logger.error(f"Found dates after maximum date {max_date}")
+        return False
+        
+    return True
+
+def validate_market_data(df: DataFrame, config: Dict[str, Any]) -> bool:
+    """Validate market data against configuration"""
+    logger.info("Starting market data validation")
+    
+    # Schema validation
+    if not validate_schema(
+        df,
+        config['required_columns'],
+        config.get('column_types', {})
+    ):
+        return False
+    
+    # Date range validation
+    if not validate_date_range(
+        df,
+        config['date_column'],
+        config.get('min_date'),
+        config.get('max_date')
+    ):
+        return False
+    
+    # Custom validations from config
+    if 'custom_validations' in config:
+        for validation in config['custom_validations']:
+            if not validation(df):
+                logger.error(f"Custom validation failed: {validation.__name__}")
+                return False
+    
+    logger.info("Market data validation successful")
+    return True
         self.checks = DataQualityChecks()
         
     def validate_market_data(self, df, config: Dict[str, Any]) -> bool:

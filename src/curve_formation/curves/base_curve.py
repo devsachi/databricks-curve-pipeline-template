@@ -1,21 +1,17 @@
-from abc import ABC, abstractmethod
 from pyspark.sql import DataFrame
-from src.utils.data_quality.validator import DataQualityValidator
-from src.curve_formation.business_logic import DayCountConvention, Calendar
+from typing import Dict, Any
+from src.utils.data_quality.validator import validate_data_quality
+from src.curve_formation.business_logic import calendar, day_count
 
-class BaseCurve(ABC):
-    def __init__(self, config):
-        self.config = config
-        self.day_count = DayCountConvention(config.curve_params.default_day_count)
-        self.calendar = Calendar(config.curve_params.business_calendar)
-        self.dq_validator = DataQualityValidator(config)
-    
-    @abstractmethod
-    def calculate(self, input_df: DataFrame) -> DataFrame:
-        """Calculate the specific curve"""
-        pass
-        
-    def _prepare_input(self, input_df: DataFrame) -> DataFrame:
-        """Common input preparation logic"""
-        self.dq_validator.validate_base_input(input_df)
-        return input_df.dropDuplicates()
+def prepare_curve_input(input_df: DataFrame, config: Dict[str, Any]) -> DataFrame:
+    """Common input preparation logic for curves"""
+    validate_data_quality(input_df, config)
+    return input_df.dropDuplicates()
+
+def calculate_base_metrics(df: DataFrame) -> Dict[str, Any]:
+    """Calculate common base metrics for curves"""
+    return {
+        'count': df.count(),
+        'min_date': df.agg({'date': 'min'}).collect()[0][0],
+        'max_date': df.agg({'date': 'max'}).collect()[0][0]
+    }
